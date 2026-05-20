@@ -1,0 +1,53 @@
+spring:
+  # =========================================================================
+  # OPTION 1: Testcontainers Setup (Empfohlen für echten PostgreSQL-Dialekt)
+  # =========================================================================
+  # Wenn du Spring Boot 4 `@ServiceConnection` verwendest, überschreibt Spring
+  # diese Datasource-Eigenschaften automatisch zur Laufzeit mit den Container-Daten.
+  datasource:
+    url: jdbc:postgresql://localhost:5432/travel_test_db
+    username: travel_user
+    password: travel_password
+    driver-class-name: org.postgresql.Driver
+
+  # =========================================================================
+  # OPTION 2: In-Memory H2 Setup (PostgreSQL-Kompatibilitätsmodus)
+  # =========================================================================
+  # Falls du für schnelle lokale Tests ohne Docker auf H2 setzen möchtest,
+  # aktiviere diese Konfiguration:
+  # datasource:
+  #   url: jdbc:h2:mem:travel_test;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DEFAULT_NULL_ORDER=HIGH
+  #   username: sa
+  #   password:
+  #   driver-class-name: org.h2.Driver
+
+  jpa:
+    # Erzwingt den PostgreSQL-Dialekt für Hibernate, auch wenn H2 als In-Memory verwendet wird
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate.multiTenancy: SCHEMA
+      # Optimierung für Test-Performance
+      hibernate.show_sql: false
+      hibernate.format_sql: false
+      hibernate.use_sql_comments: false
+      jakarta.persistence.schema-generation.scripts.create-target: src/main/resources/db/schema_create.sql
+      jakarta.persistence.schema-generation.scripts.drop-target: src/main/resources/db/schema_drop.sql
+
+  flyway:
+    enabled: false # Flyway wird weiterhin über FlywayMultiTenantInitializer pro Schema gesteuert
+
+# Reduziert das Logging-Rauschen während der Testausführung
+logging:
+  level:
+    root: WARN
+    com.example.travel: DEBUG
+    org.springframework.test: INFO
+    org.hibernate.SQL: WARN
+
+multitenancy:
+  tenants:
+    - tenant_c1000
+    - tenant_c1001
+    - tenant_c1002

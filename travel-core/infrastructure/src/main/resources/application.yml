@@ -1,0 +1,31 @@
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/travel_db
+    username: travel_user
+    password: travel_password
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate.multiTenancy: SCHEMA
+
+      # Quelle für die Generierung sind die Java-Entity-Metadaten
+      jakarta.persistence.schema-generation.create-source: metadata
+      jakarta.persistence.schema-generation.drop-source: metadata
+
+      # Welche Skripte generiert werden sollen
+      jakarta.persistence.schema-generation.scripts.action: drop-and-create
+
+      # Zielpfade für die generierten Dateien
+      jakarta.persistence.schema-generation.scripts.create-target: travel-core/infrastructure/src/main/resources/db/schema_create.sql
+      jakarta.persistence.schema-generation.scripts.drop-target: travel-core/infrastructure/src/main/resources/db/schema_drop.sql
+  flyway:
+    # Standard-Migration deaktivieren, da wir sie pro Schema im Initializer steuern
+    enabled: false
+    locations: classpath:db/migration/{vendor}
+
+# Definition der aktiven Mandanten in der Applikation
+multitenancy:
+  tenants: tenant_c1000,tenant_c1001,tenant_c1002
