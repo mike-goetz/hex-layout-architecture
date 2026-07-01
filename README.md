@@ -147,33 +147,39 @@ This layer intercepts HTTP requests, validates incoming payloads, and transforms
 The physical REST endpoint. It is strictly responsible for HTTP semantics (routes, status codes, and headers).
 
 ```java
-package com.swisscom.health.curamed.backend.infra.holiday.adapter.in.web;
+package com.example.travel.core.infrastructure.holiday.adapter.in.web;
 
-import com.swisscom.health.curamed.backend.infra.holiday.adapter.in.web.dto.HolidayBookingRequest;
-import com.swisscom.health.curamed.backend.infra.holiday.adapter.in.web.dto.HolidayBookingResponse;
+import com.example.travel.core.infrastructure.holiday.adapter.in.web.dto.HolidayBookingRequest;
+import com.example.travel.core.infrastructure.holiday.adapter.in.web.dto.HolidayBookingResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.ResponseStatus;
+import org.springframework.web.bind.annotation.RestController;
+
+import jakarta.validation.Valid;
 
 @RestController
 @RequestMapping("/api/v1/holidays")
 @RequiredArgsConstructor
-@Tag(name = "Holiday Booking", description = "Endpoints for managing holiday bookings")
+@Tag(name = "Holiday Booking", description = "Endpunkte für Ferienbuchungen")
 public class HolidayBookingController {
-    
+
     private final HolidayRestService restService;
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    @Operation(summary = "Book a new holiday (Flight + Hotel + Add-ons)")
+    @Operation(summary = "Neue Ferien buchen (Flug + Hotel + AddOns)")
     public HolidayBookingResponse book(
             @RequestHeader("X-Customer-Id") String customerId,
             @Valid @RequestBody HolidayBookingRequest request) {
-        
-        // Direct delegation to the Rest Service adapter
+
+        // Direkte Delegation an den Rest Service
         return restService.book(customerId, request);
     }
 }
@@ -184,12 +190,13 @@ public class HolidayBookingController {
 Decouples the controller from the actual use case. It orchestrates parameter parsing and mappings using MapStruct.
 
 ```java
-package com.swisscom.health.curamed.backend.infra.holiday.adapter.in.web;
+package com.example.travel.core.infrastructure.holiday.adapter.in.web;
 
-import com.swisscom.health.curamed.backend.business.holiday.BookHolidayUseCase;
-import com.swisscom.health.curamed.backend.domain.model.holiday.HolidayBooking;
-import com.swisscom.health.curamed.backend.infra.holiday.adapter.in.web.dto.HolidayBookingRequest;
-import com.swisscom.health.curamed.backend.infra.holiday.adapter.in.web.dto.HolidayBookingResponse;
+import com.example.travel.core.business.holiday.BookHolidayUseCase;
+import com.example.travel.core.business.holiday.CancelHolidayUseCase;
+import com.example.travel.core.domain.holiday.model.HolidayBooking;
+import com.example.travel.core.infrastructure.holiday.adapter.in.web.dto.HolidayBookingRequest;
+import com.example.travel.core.infrastructure.holiday.adapter.in.web.dto.HolidayBookingResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -200,21 +207,23 @@ import java.util.List;
 public class HolidayRestService {
 
     private final BookHolidayUseCase bookHolidayUseCase;
+    private final CancelHolidayUseCase cancelHolidayUseCase;
     private final HolidayRestMapper mapper;
 
     /**
-     * Receives the validated REST request, prepares parameters,
-     * and delegates business execution to the Use Case.
+     * Nimmt den validierten REST-Request entgegen, bereitet die Parameter vor
+     * und delegiert die Geschäftslogik an den Use Case.
      */
     public HolidayBookingResponse book(String customerId, HolidayBookingRequest request) {
-        // 1. Prepare parameters & extract list defaults
+
+        // 1. Mapping & Parameter-Aufbereitung
         String destination = request.getDestination();
         List<HolidayBooking.AddOn> addOns = request.getAddOns() != null ? request.getAddOns() : List.of();
 
-        // 2. Invoke core business workflow
+        // 2. Aufruf der Geschäftslogik
         HolidayBooking domainResult = bookHolidayUseCase.execute(customerId, destination, addOns);
 
-        // 3. Map Domain Model -> JSON Response DTO
+        // 3. Mapping: Domain -> Response-DTO
         return mapper.toResponse(domainResult);
     }
 }
@@ -229,12 +238,14 @@ This layer orchestrates the core workflow. It manages database transactions, loa
 The transactional orchestration boundary for booking a holiday.
 
 ```java
-package com.swisscom.health.curamed.backend.business.holiday;
+package com.example.travel.core.business.holiday;
 
-import com.swisscom.health.curamed.backend.domain.model.holiday.HolidayBooking;
-import com.swisscom.health.curamed.backend.domain.model.customer.CustomerProfile;
-import com.swisscom.health.curamed.backend.domain.port.holiday.*;
-import com.github.f4b6a3.tsid.TsidCreator;
+import com.example.travel.core.business.holiday.port.CustomerProfilePort;
+import com.example.travel.core.business.holiday.port.FlightServicePort;
+import com.example.travel.core.business.holiday.port.HolidayBookingPort;
+import com.example.travel.core.business.holiday.port.HotelServicePort;
+import com.example.travel.core.domain.customer.model.CustomerProfile;
+import com.example.travel.core.domain.holiday.model.HolidayBooking;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -242,111 +253,103 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.UUID;
 
 @Service
-@Transactional 
+@Transactional(rollbackFor = Exception.class)
 @RequiredArgsConstructor
 @Slf4j
 public class BookHolidayUseCase {
-    
-    private final HolidayBookingRepositoryPort bookingPort;
-    private final CustomerProfileRepositoryPort customerPort;
+
+    private final HolidayBookingPort bookingPort;
+    private final CustomerProfilePort customerPort;
     private final FlightServicePort flightPort;
     private final HotelServicePort hotelPort;
-    private final HolidayNotificationBusinessService notificationService;
-    private final HolidayPricingBusinessService pricingService;
+    private final HolidayNotificationService notificationService; // Injected Business Service
+    private final HolidayPricingService pricingService; // Injected Business Service
 
     public HolidayBooking execute(String customerId, String destination, List<HolidayBooking.AddOn> addOns) {
-        
-        // 1. Fetch data from outer world (via Outbound Ports)
-        CustomerProfile customer = customerPort.findByCustomerId(customerId)
-            .orElseThrow(() -> new IllegalArgumentException("Customer not found"));
 
-        // 2. Initialize the aggregate root with a PENDING status
+        CustomerProfile customer = customerPort.findByCustomerId(customerId)
+                .orElseThrow(() -> new IllegalArgumentException("Kunde nicht gefunden"));
+
         HolidayBooking booking = new HolidayBooking();
-        booking.setUid(TsidCreator.getTsid().toString());
+        booking.setUid(UUID.randomUUID().toString());
         booking.setCustomerId(customerId);
         booking.setDestination(destination);
         booking.setAddOns(addOns);
         booking.setStatus(HolidayBooking.BookingStatus.PENDING);
-        
-        // 3. Delegate the pricing logic to the stateless Business Service
+
         BigDecimal finalPrice = pricingService.calculateTotal(booking, customer);
         booking.setTotalPrice(finalPrice);
-        
-        // Save intermediate state via Port
+
         bookingPort.save(booking);
 
         String flightId = null;
         String hotelId = null;
 
         try {
-            // 4. Call external downstream systems (Saga Pattern Orchestration)
             flightId = flightPort.bookFlight(customerId, destination);
             hotelId = hotelPort.bookHotel(customerId, destination, addOns);
 
-            // 5. Success Path: confirm local state and persist
             booking.confirm(flightId, hotelId);
             HolidayBooking confirmedBooking = bookingPort.save(booking);
 
-            // 6. Trigger Business Service to handle multi-port notifications & audits
+            // Trigger notification on success
             notificationService.notifyCustomerAndLog(confirmedBooking, "Ihre Ferienbuchung nach " + destination + " wurde erfolgreich bestätigt.");
 
             return confirmedBooking;
 
         } catch (Exception e) {
-            log.error("Booking failed for UID: {}. Triggering compensation.", booking.getUid(), e);
-            
-            // Compensating action: Cancel flight if the hotel booking failed afterwards
+            log.error("Buchung fehlgeschlagen für UID: {}", booking.getUid(), e);
+
             if (flightId != null && hotelId == null) {
                 try {
-                    flightPort.cancelFlight(flightId); 
+                    flightPort.cancelFlight(flightId);
                 } catch (Exception cancelEx) {
-                    log.error("CRITICAL: Saga compensation failed!", cancelEx);
+                    log.error("KRITISCH: Kompensation fehlgeschlagen!", cancelEx);
                 }
             }
 
-            // Transition local state to FAILED
             booking.markAsFailed();
             HolidayBooking failedBooking = bookingPort.save(booking);
-            
-            // Notify & Log failure state
+
+            // Trigger notification on failure
             notificationService.notifyCustomerAndLog(failedBooking, "Ferienbuchung fehlgeschlagen: " + e.getMessage());
-            
-            throw new BookingFailedException("Holiday booking failed.", e);
+
+            throw new BookingFailedException("Ferienbuchung fehlgeschlagen.", e);
         }
     }
 }
 ```
 
-### HolidayPricingBusinessService
+### HolidayPricingService
 
 This service contains stateless calculation rules. Located in the business module, it has no direct Outbound Ports as it only processes memory structures.
 
 ```java
-package com.swisscom.health.curamed.backend.business.holiday;
+package com.example.travel.core.business.holiday;
 
-import com.swisscom.health.curamed.backend.domain.model.holiday.HolidayBooking;
-import com.swisscom.health.curamed.backend.domain.model.customer.CustomerProfile;
+
+import com.example.travel.core.domain.customer.model.CustomerProfile;
+import com.example.travel.core.domain.holiday.model.HolidayBooking;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.util.List;
 
 @Service
-public class HolidayPricingBusinessService {
+@RequiredArgsConstructor
+public class HolidayPricingService {
 
-    /**
-     * Computes the total price strictly using Domain Model states.
-     * Contains zero database mocks, pure math, and core business rules.
-     */
     public BigDecimal calculateTotal(HolidayBooking booking, CustomerProfile customer) {
         BigDecimal basePrice = getBasePrice(booking.getDestination());
         BigDecimal addOnPrice = calculateAddOns(booking.getAddOns());
-        
+
         BigDecimal total = basePrice.add(addOnPrice);
 
-        // Business Rule: VIP customers get a 10% discount on the entire sum
+        // Business Rule: VIP-Kunden erhalten 10% Rabatt auf den Gesamtpreis
         if (customer.isVip()) {
             total = total.multiply(new BigDecimal("0.90"));
         }
@@ -371,38 +374,34 @@ public class HolidayPricingBusinessService {
 }
 ```
 
-### HolidayNotificationBusinessService
+### HolidayNotificationService
 
 A coordinating Business Service that orchestrates communication with customers and audit components via Outbound Ports.
 
 ```java
-package com.swisscom.health.curamed.backend.business.holiday;
+package com.example.travel.core.business.holiday;
 
-import com.swisscom.health.curamed.backend.domain.model.holiday.HolidayBooking;
-import com.swisscom.health.curamed.backend.domain.port.holiday.NotificationPort;
-import com.swisscom.health.curamed.backend.domain.port.holiday.AuditLogPort;
+import com.example.travel.core.business.port.AuditLogPort;
+import com.example.travel.core.business.port.NotificationPort;
+import com.example.travel.core.domain.holiday.model.HolidayBooking;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 @Service
 @RequiredArgsConstructor
-public class HolidayNotificationBusinessService {
+public class HolidayNotificationService {
 
     private final NotificationPort notificationPort;
     private final AuditLogPort auditLogPort;
 
-    /**
-     * Sends customer SMS and simultaneously updates the database audit log.
-     */
+    // Diese Logik ist Orchestrierung (Business), keine reine Fachlogik (Domain)
     public void notifyCustomerAndLog(HolidayBooking booking, String message) {
-        // Send SMS notifications
         notificationPort.sendSms(booking.getCustomerId(), message);
-        
-        // Write structured logs to database audit port
+
         if (booking.getStatus() == HolidayBooking.BookingStatus.FAILED) {
-            auditLogPort.logCriticalFailure("Booking failed for customer: " + booking.getCustomerId() + ". Reason: " + message);
+            auditLogPort.logCriticalFailure("Booking failed for customer: " + booking.getCustomerId());
         } else {
-            auditLogPort.logSuccess("Booking successfully processed with UID: " + booking.getUid());
+            auditLogPort.logSuccess("Booking successful: " + booking.getUid());
         }
     }
 }
@@ -415,29 +414,31 @@ The pure core of the application. It contains pure business logic and business r
 ### HolidayBooking (Aggregate Root)
 
 ```java
-package com.swisscom.health.curamed.backend.domain.model.holiday;
+package com.example.travel.core.domain.holiday.model;
 
-import java.util.List;
-import java.util.ArrayList;
-import java.math.BigDecimal;
 import lombok.Data;
+
+import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.List;
 
 @Data
 public class HolidayBooking {
-    private String uid; 
+    private String uid;
     private String customerId;
     private String destination;
     private BookingStatus status;
     private BigDecimal totalPrice;
-    
-    // External references / IDs
+
+    // Externe Referenzen
     private String flightConfirmationId;
     private String hotelConfirmationId;
     private List<AddOn> addOns = new ArrayList<>();
 
-    public enum BookingStatus { PENDING, CONFIRMED, FAILED, CANCELLED }
-    public enum AddOn { SPA, ALL_INCLUSIVE, LATE_CHECKOUT }
-    
+    public enum BookingStatus {PENDING, CONFIRMED, FAILED, CANCELLED}
+
+    public enum AddOn {SPA, ALL_INCLUSIVE, LATE_CHECKOUT}
+
     public void confirm(String flightId, String hotelId) {
         this.flightConfirmationId = flightId;
         this.hotelConfirmationId = hotelId;
@@ -452,12 +453,12 @@ public class HolidayBooking {
 
 ## 4. The Outbound Ports (Interfaces)
 
-Ports are interface contracts declared inside the Domain / Business packages. They specify what the application needs from the external world. The technical implementation (how it is resolved) is delegated entirely to the outer infrastructure layer. All contracts here strictly end with the `Port` suffix.
+Ports are interface contracts declared inside the Business packages. They specify what the application needs from the external world. The technical implementation (how it is resolved) is delegated entirely to the outer infrastructure layer. All contracts here strictly end with the `Port` suffix.
 
 ```java
-package com.swisscom.health.curamed.backend.domain.port.holiday;
+package com.example.travel.core.business.holiday.port;
 
-import com.swisscom.health.curamed.backend.domain.model.holiday.HolidayBooking;
+import com.example.travel.core.domain.holiday.model.HolidayBooking;
 import java.util.List;
 import java.util.Optional;
 
@@ -502,25 +503,31 @@ Contains technical implementations of Outbound Ports. It leverages framework-spe
 Implements `HolidayBookingRepositoryPort`. It translates the domain model into a JPA entity, persists it via Spring Data, and translates the updated entity back to the domain model to avoid entity leakage.
 
 ```java
-package com.swisscom.health.curamed.backend.infra.holiday.adapter.out.persistence;
+package com.example.travel.core.infrastructure.holiday.adapter.out.persistence;
 
-import com.swisscom.health.curamed.backend.domain.model.holiday.HolidayBooking;
-import com.swisscom.health.curamed.backend.domain.port.holiday.HolidayBookingRepository;
+import com.example.travel.core.business.holiday.port.HolidayBookingPort;
+import com.example.travel.core.domain.holiday.model.HolidayBooking;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
+
+import java.util.Optional;
 
 @Component
 @RequiredArgsConstructor
 public class BookingRepositoryAdapter implements HolidayBookingPort {
-    
+
     private final BookingSpringDataRepo jpaRepo;
     private final BookingPersistenceMapper mapper;
 
     @Override
     public HolidayBooking save(HolidayBooking booking) {
         BookingJpaEntity entity = mapper.toJpaEntity(booking);
-        BookingJpaEntity savedEntity = jpaRepo.save(entity);
-        return mapper.toDomain(savedEntity);
+        return mapper.toDomain(jpaRepo.save(entity));
+    }
+
+    @Override
+    public Optional<HolidayBooking> findByUid(String bookingUid) {
+        return jpaRepo.findByUid(bookingUid).map(mapper::toDomain);
     }
 }
 ```
@@ -530,43 +537,93 @@ public class BookingRepositoryAdapter implements HolidayBookingPort {
 The database representation. Contains Spring and JPA annotations, schema details, indexes, and join mappings.
 
 ```java
-package com.swisscom.health.curamed.backend.infra.holiday.adapter.out.persistence;
+package com.example.travel.core.infrastructure.holiday.adapter.out.persistence;
 
-import jakarta.persistence.*;
+import com.example.travel.core.infrastructure.adapter.out.persistence.UserJpaEntity;
 import lombok.Data;
+import org.springframework.data.annotation.CreatedBy;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedBy;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.domain.Persistable;
 
+import jakarta.persistence.CollectionTable;
+import jakarta.persistence.Column;
+import jakarta.persistence.ElementCollection;
+import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.ForeignKey;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.Index;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.List;
 
 @Entity
-@Table(name = "holiday_bookings")
+@Table(
+        name = "holiday_booking",
+        indexes = {@Index(name = "UK_HOLIDAY_BOOKING__UID", columnList = "uid", unique = true)}
+)
 @Data
-public class BookingJpaEntity {
+public class BookingJpaEntity implements Persistable<Long> {
 
-    // 1. SURROGATE KEY (Database internal for highly performing index joins)
+    // 1. SURROGATE KEY (Datenbank-intern, für performante JOINs)
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @GeneratedValue(strategy = GenerationType.SEQUENCE)
     private Long id;
 
-    // 2. BUSINESS KEY (The genuine domain identity representation)
-    @Column(name = "puid", unique = true, nullable = false, updatable = false)
+    // 2. BUSINESS KEY (Die echte Identität aus der Domain)
+    @Column(name = "uid", unique = true, nullable = false, updatable = false)
     private String uid;
+
+    @Version
+    @Column(nullable = false)
+    private long version = 0;
+
+    @CreatedDate
+    @Column(nullable = false, updatable = false)
+    private Instant createdDate;
+
+    @CreatedBy
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(foreignKey = @ForeignKey(name = "FK_HOLIDAY_BOOKING__CREATED_BY"))
+    private UserJpaEntity createdBy;
+
+    @LastModifiedDate
+    private Instant lastModifiedDate;
+
+    @LastModifiedBy
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(foreignKey = @ForeignKey(name = "FK_HOLIDAY_BOOKING__MODIFIED_BY"))
+    private UserJpaEntity lastModifiedBy;
 
     private String customerId;
     private String destination;
-    
+
     @Column(name = "status")
-    private String status; // Persisted as a String representation of the Domain Enum
-    
+    private String status; // Wird als String in DB gespeichert (PENDING, CONFIRMED, etc.)
+
     private BigDecimal totalPrice;
-    
+
     private String flightConfirmationId;
     private String hotelConfirmationId;
 
+    // Einfache Collection-Table für die AddOns (SPA, ALL_INCLUSIVE)
     @ElementCollection(fetch = FetchType.EAGER)
-    @CollectionTable(name = "holiday_booking_addons", joinColumns = @JoinColumn(name = "booking_id"))
+    @CollectionTable(name = "holiday_booking_addon", joinColumns = @JoinColumn(name = "booking_id"), foreignKey = @ForeignKey(name = "FK_HOLIDAY_BOOKING__ADDON"))
     @Column(name = "add_on")
     private List<String> addOns;
+
+    @Override
+    public boolean isNew() {
+        return id == null;
+    }
 }
 ```
 
@@ -585,11 +642,11 @@ Three individual implementations of the `HotelServicePort` interface co-exist wi
 ### HotelServiceRoutingProxy
 
 ```java
-package com.swisscom.health.curamed.backend.infra.holiday.adapter.out.hotel;
+package com.example.travel.core.infrastructure.holiday.adapter.out.hotel;
 
-import com.swisscom.health.curamed.backend.domain.port.holiday.HotelServicePort;
-import com.swisscom.health.curamed.backend.domain.model.holiday.HolidayBooking;
-import com.swisscom.health.curamed.backend.infra.config.tenant.TenantContext;
+import com.example.travel.core.business.holiday.port.HotelServicePort;
+import com.example.travel.core.domain.holiday.model.HolidayBooking;
+import com.example.travel.core.infrastructure.config.tenant.TenantContext;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
@@ -599,7 +656,7 @@ import org.springframework.stereotype.Component;
 import java.util.List;
 
 @Component
-@Primary // Instructs Spring to inject this proxy as the default HotelServicePort bean
+@Primary // Teilt Spring-DI mit, dass dieser Proxy als primärer Bean für HotelServicePort genutzt werden soll
 @Slf4j
 public class HotelServiceRoutingProxy implements HotelServicePort {
 
@@ -629,24 +686,24 @@ public class HotelServiceRoutingProxy implements HotelServicePort {
     }
 
     /**
-     * Resolves the active provider dynamically based on the current tenant or configuration fallback.
+     * Ermittelt den aktiven Provider anhand von Tenant-Regeln oder globalen Feature-Flags.
      */
     private HotelServicePort resolveActiveProvider() {
         String currentTenant = TenantContext.getTenantId();
 
-        // 1. Tenant-Aware Routing Rules
-        if ("tenant_germany".equals(currentTenant)) {
-            log.debug("Tenant {} is active. Routing to: trivago", currentTenant);
+        // Beispiel 1: Mandantenspezifisches Routing (Tenant-Aware Routing)
+        if ("tenant_c1001".equals(currentTenant)) {
+            log.debug("Tenant {} aktiv. Route zu: trivago", currentTenant);
             return trivagoProvider;
         }
-        
-        if ("tenant_switzerland".equals(currentTenant)) {
-            log.debug("Tenant {} is active. Routing to: bookingCom", currentTenant);
+
+        if ("tenant_c1002".equals(currentTenant)) {
+            log.debug("Tenant {} aktiv. Route zu: bookingCom", currentTenant);
             return bookingComProvider;
         }
 
-        // 2. Global Feature Flag fallback (configured in application.yml)
-        log.debug("Using fallback routing. Routing to default provider: {}", defaultProvider);
+        // Beispiel 2: Fallback auf das globale Feature-Flag (aus application.yml / Togglz)
+        log.debug("Standard-Routing aktiv. Route zu konfiguriertem Provider: {}", defaultProvider);
         if ("trivago".equalsIgnoreCase(defaultProvider)) {
             return trivagoProvider;
         }
@@ -659,59 +716,55 @@ public class HotelServiceRoutingProxy implements HotelServicePort {
 ### BookingComAdapter
 
 ```java
-package com.swisscom.health.curamed.backend.infra.holiday.adapter.out.hotel;
+package com.example.travel.core.infrastructure.holiday.adapter.out.hotel;
 
-import com.swisscom.health.curamed.backend.domain.port.holiday.HotelServicePort;
-import com.swisscom.health.curamed.backend.domain.model.holiday.HolidayBooking;
-import lombok.extern.slf4j.Slf4j;
+import com.example.travel.core.business.holiday.port.HotelServicePort;
+import com.example.travel.core.domain.holiday.model.HolidayBooking;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
 
 @Component("bookingCom")
-@Slf4j
+@RequiredArgsConstructor
 public class BookingComAdapter implements HotelServicePort {
 
     @Override
     public String bookHotel(String customerId, String destination, List<HolidayBooking.AddOn> addOns) {
-        log.info("Contacting Booking.com API to book a room in {} for customer {}", destination, customerId);
-        // Call Booking.com external API client here
-        return "BKG-COM-CONF-98765";
+        return "BOOK-12493520";
     }
 
     @Override
     public void cancelHotel(String hotelConfirmationId) {
-        log.info("Cancelling Booking.com reservation: {}", hotelConfirmationId);
+
     }
 }
+
 ```
 
 ### TrivagoAdapter
 
 ```java
-package com.swisscom.health.curamed.backend.infra.holiday.adapter.out.hotel;
+package com.example.travel.core.infrastructure.holiday.adapter.out.hotel;
 
-import com.swisscom.health.curamed.backend.domain.port.holiday.HotelServicePort;
-import com.swisscom.health.curamed.backend.domain.model.holiday.HolidayBooking;
-import lombok.extern.slf4j.Slf4j;
+import com.example.travel.core.business.holiday.port.HotelServicePort;
+import com.example.travel.core.domain.holiday.model.HolidayBooking;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
 
 @Component("trivago")
-@Slf4j
+@RequiredArgsConstructor
 public class TrivagoAdapter implements HotelServicePort {
-
     @Override
     public String bookHotel(String customerId, String destination, List<HolidayBooking.AddOn> addOns) {
-        log.info("Contacting Trivago API to book hotel accommodations in {}", destination);
-        // Call Trivago external API client here
-        return "TRIVAGO-CONF-55443";
+        return "TRIV-23482";
     }
 
     @Override
     public void cancelHotel(String hotelConfirmationId) {
-        log.info("Cancelling Trivago booking: {}", hotelConfirmationId);
+
     }
 }
 ```

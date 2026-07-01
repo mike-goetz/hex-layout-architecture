@@ -1,10 +1,10 @@
 package com.example.travel.core.business.holiday;
 
+import com.example.travel.core.business.holiday.port.CustomerProfilePort;
+import com.example.travel.core.business.holiday.port.FlightServicePort;
+import com.example.travel.core.business.holiday.port.HolidayBookingPort;
+import com.example.travel.core.business.holiday.port.HotelServicePort;
 import com.example.travel.core.domain.customer.model.CustomerProfile;
-import com.example.travel.core.domain.holiday.CustomerProfilePort;
-import com.example.travel.core.domain.holiday.FlightServicePort;
-import com.example.travel.core.domain.holiday.HolidayBookingPort;
-import com.example.travel.core.domain.holiday.HotelServicePort;
 import com.example.travel.core.domain.holiday.model.HolidayBooking;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -16,7 +16,7 @@ import java.util.List;
 import java.util.UUID;
 
 @Service
-@Transactional
+@Transactional(rollbackFor = Exception.class)
 @RequiredArgsConstructor
 @Slf4j
 public class BookHolidayUseCase {

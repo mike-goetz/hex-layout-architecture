@@ -1,7 +1,7 @@
 package com.example.travel.core.infrastructure.customer.adapter.out.persistence;
 
+import com.example.travel.core.business.holiday.port.CustomerProfilePort;
 import com.example.travel.core.domain.customer.model.CustomerProfile;
-import com.example.travel.core.domain.holiday.CustomerProfilePort;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 

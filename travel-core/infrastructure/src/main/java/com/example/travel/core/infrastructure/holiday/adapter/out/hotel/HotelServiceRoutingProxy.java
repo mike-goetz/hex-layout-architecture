@@ -1,6 +1,6 @@
 package com.example.travel.core.infrastructure.holiday.adapter.out.hotel;
 
-import com.example.travel.core.domain.holiday.HotelServicePort;
+import com.example.travel.core.business.holiday.port.HotelServicePort;
 import com.example.travel.core.domain.holiday.model.HolidayBooking;
 import com.example.travel.core.infrastructure.config.tenant.TenantContext;
 import lombok.extern.slf4j.Slf4j;

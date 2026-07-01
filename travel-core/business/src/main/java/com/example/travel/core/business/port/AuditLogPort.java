@@ -1,4 +1,4 @@
-package com.example.travel.core.domain.port;
+package com.example.travel.core.business.port;
 
 public interface AuditLogPort {
     /**

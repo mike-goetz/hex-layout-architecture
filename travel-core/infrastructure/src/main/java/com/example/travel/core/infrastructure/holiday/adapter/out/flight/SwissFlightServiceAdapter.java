@@ -1,6 +1,6 @@
 package com.example.travel.core.infrastructure.holiday.adapter.out.flight;
 
-import com.example.travel.core.domain.holiday.FlightServicePort;
+import com.example.travel.core.business.holiday.port.FlightServicePort;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;

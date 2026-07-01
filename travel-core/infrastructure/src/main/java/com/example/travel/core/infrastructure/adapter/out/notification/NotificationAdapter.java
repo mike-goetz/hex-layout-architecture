@@ -1,6 +1,6 @@
 package com.example.travel.core.infrastructure.adapter.out.notification;
 
-import com.example.travel.core.domain.port.NotificationPort;
+import com.example.travel.core.business.port.NotificationPort;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 

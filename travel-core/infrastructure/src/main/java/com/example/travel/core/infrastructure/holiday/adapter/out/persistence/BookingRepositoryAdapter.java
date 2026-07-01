@@ -1,6 +1,6 @@
 package com.example.travel.core.infrastructure.holiday.adapter.out.persistence;
 
-import com.example.travel.core.domain.holiday.HolidayBookingPort;
+import com.example.travel.core.business.holiday.port.HolidayBookingPort;
 import com.example.travel.core.domain.holiday.model.HolidayBooking;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;

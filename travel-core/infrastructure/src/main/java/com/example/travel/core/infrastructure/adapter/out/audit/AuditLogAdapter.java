@@ -1,6 +1,6 @@
 package com.example.travel.core.infrastructure.adapter.out.audit;
 
-import com.example.travel.core.domain.port.AuditLogPort;
+import com.example.travel.core.business.port.AuditLogPort;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;

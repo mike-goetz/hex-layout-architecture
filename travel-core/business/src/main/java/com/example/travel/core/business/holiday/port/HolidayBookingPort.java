@@ -1,4 +1,4 @@
-package com.example.travel.core.domain.holiday;
+package com.example.travel.core.business.holiday.port;
 
 
 import com.example.travel.core.domain.holiday.model.HolidayBooking;

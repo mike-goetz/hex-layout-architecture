@@ -1,8 +1,8 @@
 package com.example.travel.core.business.holiday;
 
+import com.example.travel.core.business.port.AuditLogPort;
+import com.example.travel.core.business.port.NotificationPort;
 import com.example.travel.core.domain.holiday.model.HolidayBooking;
-import com.example.travel.core.domain.port.AuditLogPort;
-import com.example.travel.core.domain.port.NotificationPort;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
